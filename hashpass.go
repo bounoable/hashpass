@@ -2,6 +2,7 @@ package hashpass
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/bounoable/hashpass/argon2"
 )
@@ -14,6 +15,7 @@ type Hasher interface {
 
 // Hashpass ...
 type Hashpass struct {
+	lock             sync.RWMutex
 	hashers          map[string]Hasher
 	DefaultAlgorithm string
 }
@@ -40,14 +42,18 @@ func NewDefault() *Hashpass {
 
 // Register registers a hasher.
 func (hp *Hashpass) Register(name string, hasher Hasher) {
+	hp.lock.Lock()
 	hp.hashers[name] = hasher
+	hp.lock.Unlock()
 }
 
 // RegisterMany registered multiple hashers.
 func (hp *Hashpass) RegisterMany(hashers map[string]Hasher) {
+	hp.lock.Lock()
 	for name, hasher := range hashers {
-		hp.Register(name, hasher)
+		hp.hashers[name] = hasher
 	}
+	hp.lock.Unlock()
 }
 
 // Hash hashes the value with the default algorithm.
@@ -115,7 +121,9 @@ func (hp *Hashpass) VerifyStringWith(algo string, value, encoded string) (bool, 
 }
 
 func (hp *Hashpass) hasher(name string) (Hasher, error) {
+	hp.lock.RLock()
 	hasher, ok := hp.hashers[name]
+	hp.lock.RUnlock()
 
 	if !ok {
 		return nil, UnregisteredHasherError{Name: name}
